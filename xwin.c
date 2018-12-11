@@ -73,6 +73,11 @@ extern char g_seamless_spawn_cmd[];
 extern int g_server_depth;
 extern int g_win_button_size;
 
+/* mouse keepalive "jiggle" event support */
+uint32 keepalive_interval;
+static uint32 keepalive_last;
+static int mouse_crt_x, mouse_crt_y; /* keep track of mouse pointer pos. */
+
 /* This is a timer used to rate limit actual resizing */
 static struct timeval g_resize_timer = { 0 };
 
@@ -2504,6 +2509,8 @@ handle_button_event(XEvent xevent, uint32 ev_time, RD_BOOL down)
 		return;
 	}
 
+	keepalive_last = ev_time; /* reset keepalive inactivity timer */
+
 	if (xevent.xmotion.window == g_wnd)
 	{
 		rdp_send_input(ev_time, input_type,
@@ -2625,6 +2632,7 @@ xwin_process_events(void)
 
 				xkeymap_send_keys(keysym, xevent.xkey.keycode, xevent.xkey.state,
 						  ev_time, True, 0);
+				keepalive_last = ev_time; /* reset keepalive inactivity timer */
 				break;
 
 			case KeyRelease:
@@ -2641,6 +2649,7 @@ xwin_process_events(void)
 
 				xkeymap_send_keys(keysym, xevent.xkey.keycode, xevent.xkey.state,
 						  ev_time, False, 0);
+				keepalive_last = ev_time; /* reset keepalive inactivity timer */
 				break;
 
 			case ButtonPress:
@@ -2676,6 +2685,10 @@ xwin_process_events(void)
 						       xevent.xmotion.x_root,
 						       xevent.xmotion.y_root);
 				}
+				keepalive_last = ev_time; /* reset keepalive inactivity timer */
+				/* also, update current mouse pointer pos. */
+				mouse_crt_x = xevent.xmotion.x;
+				mouse_crt_y = xevent.xmotion.y;
 				break;
 
 			case FocusIn:
@@ -2954,6 +2967,33 @@ xwin_process_events(void)
 				break;
 		}
 	}
+
+	/* If keepalive mouse "jiggle" events enabled, and inactivity timer
+	   has expired, generate a small server-side mouse movement */
+	ev_time = time(NULL);
+	if (keepalive_interval &&
+	    ev_time >= keepalive_last + keepalive_interval)
+	{
+		/* calculate random (but valid) location for remote mouse */
+		int tmp_x, tmp_y;
+		do {
+			tmp_x = mouse_crt_x + (rand() & 63) - 32;
+			tmp_y = mouse_crt_y + (rand() & 63) - 32;
+		} while (tmp_x < 0 || tmp_x >= g_session_width ||
+			 tmp_y < 0 || tmp_y >= g_session_height);
+
+		/* leaving local pointer alone, move remote pointer to
+		   the new location, and then immediately back. The user
+		   shouldn't notice anything, since the "jiggle" is only
+		   processed server-side. */
+		rdp_send_input(ev_time, RDP_INPUT_MOUSE, MOUSE_FLAG_MOVE,
+			       tmp_x, tmp_y);
+		rdp_send_input(ev_time, RDP_INPUT_MOUSE, MOUSE_FLAG_MOVE,
+			       mouse_crt_x, mouse_crt_y);
+
+		keepalive_last = ev_time; /* reset keepalive inactivity timer */
+	}
+
 	/* Keep going */
 	return 1;
 }
@@ -3194,7 +3234,7 @@ ui_select(int rdp_socket)
 		   use a low timeout.
 		 */
 
-		timeout = 60000;
+		timeout = MIN(keepalive_interval, 60) * 1000;
 
 		if (XPending(g_display) > 0)
 			timeout = 0;

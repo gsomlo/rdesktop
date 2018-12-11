@@ -132,6 +132,11 @@ have a French version of NT TSE.
 Disable encryption from client to server.  This sends an encrypted login packet,
 but everything after this is unencrypted (including interactive logins).
 .TP
+.BR "-J <interval>"
+Send Keepalive mouse motion events every <interval> seconds. This
+prevents the server from timing out the session due to inactivity,
+potentially terminating important non-interactive programs.
+.TP
 .BR "-m"
 Do not send mouse motion events.  This saves bandwidth, although some Windows
 applications may rely on receiving mouse motion.

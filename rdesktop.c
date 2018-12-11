@@ -159,6 +159,8 @@ extern RDPDR_DEVICE g_rdpdr_device[];
 extern uint32 g_num_devices;
 extern char *g_rdpdr_clientname;
 
+extern uint32 keepalive_interval;
+
 /* Display usage information */
 static void
 usage(char *program)
@@ -188,6 +190,7 @@ usage(char *program)
 	fprintf(stderr, "   -B: use BackingStore of X-server (if available)\n");
 	fprintf(stderr, "   -e: disable encryption (French TS)\n");
 	fprintf(stderr, "   -E: disable encryption from client to server\n");
+	fprintf(stderr, "   -J: keepalive mouse \"jiggle\" event interval\n");
 	fprintf(stderr, "   -m: do not send motion events\n");
 	fprintf(stderr, "   -M: use local mouse cursor\n");
 	fprintf(stderr, "   -C: use private colour map\n");
@@ -818,13 +821,17 @@ main(int argc, char *argv[])
 	g_num_devices = 0;
 
 	while ((c = getopt(argc, argv,
-			   "A:V:u:L:d:s:c:p:n:k:g:o:fbBeEitmMzCDKS:T:NX:a:x:Pr:045vh?")) != -1)
+			   "A:J:V:u:L:d:s:c:p:n:k:g:o:fbBeEitmMzCDKS:T:NX:a:x:Pr:045vh?")) != -1)
 	{
 		switch (c)
 		{
 			case 'A':
 				g_seamless_rdp = True;
 				STRNCPY(g_seamless_shell, optarg, sizeof(g_seamless_shell));
+				break;
+
+			case 'J':
+				keepalive_interval = strtoul(optarg, NULL, 10);
 				break;
 
 			case 'V':
